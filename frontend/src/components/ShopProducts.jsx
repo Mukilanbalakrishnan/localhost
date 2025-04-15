@@ -84,6 +84,7 @@ const ShopProducts = () => {
                                 <th className="py-3 px-4 text-left">Product Name</th>
                                 <th className="py-3 px-4 text-left">Quantity</th>
                                 <th className="py-3 px-4 text-left">Price</th>
+                                <th className="py-3 px-4 text-left">Category</th>
                                 <th className="py-3 px-4 text-center">Add to Cart</th>
                             </tr>
                         </thead>
@@ -93,6 +94,7 @@ const ShopProducts = () => {
                                     <td className="py-3 px-4">{product.productName}</td>
                                     <td className="py-3 px-4">{product.quantity}</td>
                                     <td className="py-3 px-4">Rs.{product.price}</td>
+                                    <td className="py-3 px-4">{product.category}</td>
                                     <td className="py-3 px-4 text-center">
                                         <div className="flex items-center gap-2 justify-center">
                                             <input

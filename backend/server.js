@@ -64,6 +64,7 @@ const shopProductSchema = new mongoose.Schema({
     productName: String,
     price: Number,
     quantity: Number,
+    category: String
 });
 
 const ShopProduct = mongoose.model("ShopProduct", shopProductSchema);
@@ -279,36 +280,83 @@ app.get("/api/shops", async (req, res) => {
 
 
 
+// app.post("/api/add-shop", async (req, res) => {
+//     try {
+//         const { shopName, shopOwnerName } = req.body;
+
+//         // Check if shop already exists in ShopDetails collection
+//         const existingShop = await ShopDetails.findOne({ shopName });
+
+//         if (existingShop) {
+//             return res.status(400).json({ error: "Shop name already exists" });
+//         }
+
+//         // Add shop details to ShopDetails collection
+//         const newShop = new ShopDetails({ shopName, shopOwnerName });
+//         await newShop.save();
+
+//         // Define a dynamic schema for the new shop's collection
+//         const shopSchema = new mongoose.Schema({
+//             productName: String,
+//             quantity: Number,
+//             price: Number,
+//             category: String
+//         });
+
+//         // Create a new Mongoose model dynamically
+//         const ShopModel = mongoose.model(shopName, shopSchema, shopName);
+
+//         // Insert a dummy document to force collection creation
+//         await ShopModel.create({
+//             productName: "Sample Product",
+//             quantity: 0,
+//             price: 0,
+//             category: "Sample Category"
+//         });
+
+//         res.status(201).json({ success: true, message: "Shop added successfully and collection created" });
+
+//     } catch (error) {
+//         console.error("Error adding shop:", error);
+//         res.status(500).json({ error: "Internal server error" });
+//     }
+// });
+
+
 app.post("/api/add-shop", async (req, res) => {
     try {
         const { shopName, shopOwnerName } = req.body;
 
-        // Check if shop already exists in ShopDetails collection
+        if (!shopName || !shopOwnerName) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        const sanitizedShopName = shopName.replace(/\s+/g, '_').toLowerCase();
+
         const existingShop = await ShopDetails.findOne({ shopName });
 
         if (existingShop) {
             return res.status(400).json({ error: "Shop name already exists" });
         }
 
-        // Add shop details to ShopDetails collection
         const newShop = new ShopDetails({ shopName, shopOwnerName });
         await newShop.save();
 
-        // Define a dynamic schema for the new shop's collection
         const shopSchema = new mongoose.Schema({
             productName: String,
             quantity: Number,
-            price: Number
-        });
+            price: Number,
+            category: String
+        }, { timestamps: true });
 
-        // Create a new Mongoose model dynamically
-        const ShopModel = mongoose.model(shopName, shopSchema, shopName);
+        const ShopModel = mongoose.models[sanitizedShopName] || 
+                          mongoose.model(sanitizedShopName, shopSchema, sanitizedShopName);
 
-        // Insert a dummy document to force collection creation
         await ShopModel.create({
             productName: "Sample Product",
             quantity: 0,
-            price: 0
+            price: 0,
+            category: "Sample Category"
         });
 
         res.status(201).json({ success: true, message: "Shop added successfully and collection created" });
@@ -318,6 +366,7 @@ app.post("/api/add-shop", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
+
 
 
 
@@ -442,9 +491,9 @@ app.get("/api/shop-details", async (req, res) => {
 
 
 app.post("/api/add-product", async (req, res) => {
-    const { shopName, productName, quantity, price } = req.body;
+    const { shopName, productName, quantity, price , category} = req.body;
 
-    if (!shopName || !productName || !quantity || !price) {
+    if (!shopName || !productName || !quantity || !price || !category) {
         return res.status(400).json({ success: false, message: "All fields are required" });
     }
 
@@ -453,6 +502,7 @@ app.post("/api/add-product", async (req, res) => {
             productName,
             quantity: parseInt(quantity),
             price: parseFloat(price),
+            category
         });
 
         res.json({ success: true, message: "Product added successfully!" });
