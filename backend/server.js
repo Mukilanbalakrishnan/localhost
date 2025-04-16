@@ -10,15 +10,15 @@ app.use((err, req, res, next) => {
 
 app.use(
     cors({
-      origin: [
-        "http://localhost:5173",                        // Vite dev server
-        "http://localhost:3000",                        // CRA dev server
-        "https://radiant-meerkat-5f7312.netlify.app"      // ✅ your actual Netlify domain
-      ],
-      credentials: true,
+        origin: [
+            "http://localhost:5173",                        // Vite dev server
+            "http://localhost:3000",                        // CRA dev server
+            "https://radiant-meerkat-5f7312.netlify.app"      // ✅ your actual Netlify domain
+        ],
+        credentials: true,
     })
-  );
-  
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -70,23 +70,24 @@ const shopProductSchema = new mongoose.Schema({
 const ShopProduct = mongoose.model("ShopProduct", shopProductSchema);
 
 const userSchema = new mongoose.Schema({
+    userID: String,
     username: String,
     coins: Number,
 });
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema, "UserDetails");
 
 
 
 
 
 const orderSchema = new mongoose.Schema({
-    userID: String,  
+    userID: String,
     shopName: String,
     productName: String,
-    quantity: Number,  
-    price: Number,  
-    totalAmount: Number,  
+    quantity: Number,
+    price: Number,
+    totalAmount: Number,
     orderId: Number,
     timestamp: { type: Date, default: Date.now },
     delivered: { type: Boolean, default: false }  // ✅ New field to track delivered orders
@@ -349,8 +350,8 @@ app.post("/api/add-shop", async (req, res) => {
             category: String
         }, { timestamps: true });
 
-        const ShopModel = mongoose.models[sanitizedShopName] || 
-                          mongoose.model(sanitizedShopName, shopSchema, sanitizedShopName);
+        const ShopModel = mongoose.models[sanitizedShopName] ||
+            mongoose.model(sanitizedShopName, shopSchema, sanitizedShopName);
 
         await ShopModel.create({
             productName: "Sample Product",
@@ -491,7 +492,7 @@ app.get("/api/shop-details", async (req, res) => {
 
 
 app.post("/api/add-product", async (req, res) => {
-    const { shopName, productName, quantity, price , category} = req.body;
+    const { shopName, productName, quantity, price, category } = req.body;
 
     if (!shopName || !productName || !quantity || !price || !category) {
         return res.status(400).json({ success: false, message: "All fields are required" });
@@ -772,6 +773,98 @@ app.get("/api/orders/report", async (req, res) => {
         res.status(500).json({ error: "Failed to fetch report" });
     }
 });
+
+
+// Example route in your Express backend
+// app.delete("/api/orders/decline/:orderId", async (req, res) => {
+//     const { orderId } = req.params;
+
+//     try {
+//         const order = await Order.findById(orderId);
+//         if (!order) return res.status(404).json({ error: "Order not found" });
+
+//         // Restore product quantity
+//         await Product.updateOne(
+//             { shopName: order.shopName, productName: order.productName },
+//             { $inc: { quantity: order.quantity } }
+//         );
+
+//         // Restore user coins
+//         await User.updateOne(
+//             { userID: order.userID },
+//             { $inc: { coins: order.totalAmount } }
+//         );
+
+//         // Delete order
+//         await OrderDetails.deleteOne({ _id: orderId });
+
+//         res.json({ success: true, message: "Order declined and inventory/coins restored." });
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ error: "Server error during decline." });
+//     }
+// });
+
+
+app.delete("/api/orders/decline/:orderId", async (req, res) => {
+    try {
+        const orderId = req.params.orderId;
+
+        // Step 1: Find the order
+        const order = await OrderDetails.findById(orderId);
+        if (!order) {
+            console.log("Order not found");
+            return res.status(404).json({ message: "Order not found" });
+        }
+
+        console.log("Order found:", order);
+
+        const { userID, productName, quantity, totalAmount, shopName } = order;
+
+        // Step 2: Refund coins
+        const user = await User.findOne({ userID: userID.trim() });
+
+        if (!user) {
+            console.log("All users:", await User.find({}));
+
+            // console.log("User not found:", userID);
+        } else {
+            console.log("User before refund:", user);
+            user.coins += totalAmount;
+            await user.save();
+            console.log("User after refund:", user);
+        }
+
+        // Step 3: Restore product quantity
+        // Update product quantity from the specific shop collection
+        const getShopProductModel = (shopName) => {
+            return mongoose.model(shopName, shopProductSchema, shopName);
+        };
+
+        const ShopProduct = getShopProductModel(order.shopName);
+        const product = await ShopProduct.findOne({ productName: order.productName });
+        if (product) {
+            product.quantity += order.quantity;
+            await product.save();
+            console.log("Product quantity restored.");
+        } else {
+            console.log("Product not found in", order.shopName);
+        }
+
+        // Step 4: Delete order
+        await OrderDetails.findByIdAndDelete(orderId);
+        console.log("Order deleted");
+
+        res.status(200).json({ message: "Order declined and changes made" });
+    } catch (error) {
+        console.error("Error in decline route:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+});
+
+
+
+
 
 
 

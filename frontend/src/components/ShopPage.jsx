@@ -106,7 +106,7 @@ const ShopPage = () => {
         }
     };
 
-  const fetchDeliveredOrders = async () => {
+    const fetchDeliveredOrders = async () => {
         try {
             const response = await fetch(`http://localhost:5000/api/delivered-orders/${shopName}`);
             const data = await response.json();
@@ -115,6 +115,26 @@ const ShopPage = () => {
             console.error("Failed to fetch delivered orders:", error);
         }
     };
+
+
+    const handleDecline = async (orderId) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/orders/decline/${orderId}`, {
+                method: "DELETE",
+            });
+    
+            if (response.ok) {
+                setOrders(prev => prev.filter(order => order._id !== orderId));
+                setMessage("Order declined successfully.");
+            } else {
+                console.error("Failed to decline the order");
+            }
+        } catch (error) {
+            console.error("Error declining the order:", error);
+        }
+    };
+    
+
 
 
 
@@ -219,6 +239,16 @@ const ShopPage = () => {
                                             Deliver
                                         </button>
                                     </td>
+                                    <td className="p-3 border">
+
+                                        <button
+                                            onClick={() => handleDecline(order._id)}
+                                            className="px-4 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition"
+                                        >
+                                            Decline
+                                        </button>
+                                    </td>
+
                                 </tr>
                             ))}
                         </tbody>
