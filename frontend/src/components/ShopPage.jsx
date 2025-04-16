@@ -11,6 +11,10 @@ const ShopPage = () => {
     const [orders, setOrders] = useState([]);
     const [filteredOrders, setFilteredOrders] = useState([]); // Store report data
     const [category, setCategory] = useState("");
+    const [editIndex, setEditIndex] = useState(null);
+    const [editedProduct, setEditedProduct] = useState({ quantity: '', price: '' });
+
+
 
 
     // Fetch shop data
@@ -122,7 +126,7 @@ const ShopPage = () => {
             const response = await fetch(`http://localhost:5000/api/orders/decline/${orderId}`, {
                 method: "DELETE",
             });
-    
+
             if (response.ok) {
                 setOrders(prev => prev.filter(order => order._id !== orderId));
                 setMessage("Order declined successfully.");
@@ -133,7 +137,41 @@ const ShopPage = () => {
             console.error("Error declining the order:", error);
         }
     };
-    
+
+    const handleSave = async (shopName, productName) => {
+        try {
+            const res = await fetch("http://localhost:5000/api/products/update", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    shopName,
+                    productName,
+                    quantity: Number(editedProduct.quantity),
+                    price: Number(editedProduct.price)
+                }),
+            });
+
+            if (!res.ok) throw new Error("Failed to update");
+
+            const updatedProduct = await res.json();
+
+            const updatedData = [...shopData];
+            updatedData[editIndex] = {
+                ...updatedData[editIndex],
+                quantity: editedProduct.quantity,
+                price: editedProduct.price,
+            };
+
+            setShopData(updatedData);
+            setEditIndex(null);
+            setEditedProduct({ quantity: "", price: "" });
+        } catch (err) {
+            console.error("Failed to update product", err);
+        }
+    };
+
+
+
 
 
 
@@ -192,18 +230,82 @@ const ShopPage = () => {
             {/* Shop Inventory */}
             <div className="bg-gray-100 p-5 rounded-lg shadow-md mb-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">Shop Inventory</h3>
-                {shopData.length > 0 ? (
-                    <ul className="space-y-2">
-                        {shopData.map((item, index) => (
-                            <li key={index} className="p-2 border-b border-gray-300">
-                                <strong className="text-indigo-700">{item.productName}</strong> -
-                                <span className="text-gray-700"> {item.quantity} available at ₹{item.price}</span>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="text-gray-600">No products available</p>
-                )}
+                <div className="overflow-x-auto">
+                    <table className="min-w-full border border-gray-300">
+                        <thead className="bg-gray-200">
+
+                            <tr>
+
+                                <th className="p-3 border">Product Name</th>
+                                <th className="p-3 border">Quantity</th>
+                                <th className="p-3 border">Price</th>
+                                <th className="p-3 border">Category</th>
+                                <th className="p-3 border">Action</th>
+
+                            </tr>
+
+                        </thead>
+                        <tbody>
+                            {shopData.map((item, index) => (
+                                <tr key={index} className="border-b border-gray-300">
+                                    <td className="p-3 text-center">{item.productName}</td>
+                                    <td className="p-3 text-center">
+                                        {editIndex === index ? (
+                                            <input
+                                                type="number"
+                                                value={editedProduct.quantity}
+                                                onChange={(e) =>
+                                                    setEditedProduct({ ...editedProduct, quantity: e.target.value })
+                                                }
+                                                className="w-20 p-1 border rounded"
+                                            />
+                                        ) : (
+                                            item.quantity
+                                        )}
+                                    </td>
+                                    <td className="p-3 text-center">
+                                        {editIndex === index ? (
+                                            <input
+                                                type="number"
+                                                value={editedProduct.price}
+                                                onChange={(e) =>
+                                                    setEditedProduct({ ...editedProduct, price: e.target.value })
+                                                }
+                                                className="w-20 p-1 border rounded"
+                                            />
+                                        ) : (
+                                            item.price
+                                        )}
+                                    </td>
+
+                                    <td className="p-3 text-center">{item.category}</td>
+                                    <td className="p-3 border">
+                                        {editIndex === index ? (
+                                            <button
+                                                className="px-4 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 transition"
+                                                onClick={() => handleSave(shopName, item.productName)}
+                                            >
+                                                Save
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="px-4 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
+                                                onClick={() => {
+                                                    setEditIndex(index);
+                                                    setEditedProduct({ quantity: item.quantity, price: item.price });
+                                                }}
+                                            >
+                                                Update
+                                            </button>
+                                        )}
+                                    </td>
+
+                                </tr>
+                            ))}
+
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {/* Shop Orders */}

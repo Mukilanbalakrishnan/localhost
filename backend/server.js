@@ -864,6 +864,33 @@ app.delete("/api/orders/decline/:orderId", async (req, res) => {
 
 
 
+// PUT /api/products/update
+app.put("/api/products/update", async (req, res) => {
+    const { shopName, productName, quantity, price } = req.body;
+
+    try {
+        const ShopModel = mongoose.model(shopName, shopProductSchema, shopName); // dynamic model by collection
+        const updated = await ShopModel.findOneAndUpdate(
+            { productName },
+            { $set: { quantity, price } },
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+
+        res.json({ message: 'Product updated successfully', updated });
+    } catch (error) {
+        console.error('Error updating product:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+  
+
+
+
 
 
 
