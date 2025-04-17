@@ -556,30 +556,31 @@ app.get("/api/products/:shop", async (req, res) => {
 
 app.post("/api/buy", async (req, res) => {
     try {
-        const { username, shopName, cart } = req.body;
+        const { username, cart } = req.body;
+        const shopName = cart[0]?.shopName;
+
         console.log("Received from client:", req.body);
-        if (!username || !shopName || !cart || cart.length === 0) {
+
+        if (!username || !cart || cart.length === 0) {
             return res.status(400).json({ message: "Invalid request data" });
         }
 
-        // ✅ Find user by username
         const user = await UserDetails.findOne({ username });
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        const userID = user.userID; // ✅ Get userID
+        const userID = user.userID;
         const productCollection = mongoose.connection.collection(shopName);
 
         let totalCost = 0;
 
-        // ✅ Check stock and calculate total cost
         for (let item of cart) {
             const product = await productCollection.findOne({ productName: item.productName });
 
             if (!product) {
-                return res.status(404).json({ message: `Product ${item.productName} not found` });
+                return res.status(404).json(`{ message: Product ${item.productName} not found }`);
             }
             if (product.quantity < item.quantity) {
-                return res.status(400).json({ message: `Not enough stock for ${item.productName}` });
+                return res.status(400).json(`{ message: Not enough stock for ${item.productName} }`);
             }
 
             totalCost += item.price * item.quantity;
@@ -589,11 +590,9 @@ app.post("/api/buy", async (req, res) => {
             return res.status(400).json({ message: "Not enough coins" });
         }
 
-        // ✅ Deduct user coins
         user.coins -= totalCost;
         await user.save();
 
-        // ✅ Deduct product quantity
         for (let item of cart) {
             await productCollection.updateOne(
                 { productName: item.productName },
@@ -601,22 +600,19 @@ app.post("/api/buy", async (req, res) => {
             );
         }
 
-        // ✅ Generate Order ID
         const orderId = Math.floor(1000 + Math.random() * 9000);
 
-        // ✅ Ensure all required fields are inserted
         const orders = cart.map(item => ({
-            userID: user.userID,  // ✅ Store userID
+            userID: user.userID,
             shopName,
             productName: item.productName,
-            quantity: item.quantity,  // ✅ Store quantity
-            price: item.price,  // ✅ Store price per unit
-            totalAmount: item.quantity * item.price,  // ✅ Store totalAmount
+            quantity: item.quantity,
+            price: item.price,
+            totalAmount: item.quantity * item.price,
             orderId,
             timestamp: new Date()
         }));
 
-        // ✅ Insert into MongoDB
         await OrderDetails.insertMany(orders);
 
         res.json({
