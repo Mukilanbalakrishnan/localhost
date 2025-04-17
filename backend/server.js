@@ -887,6 +887,25 @@ app.put("/api/products/update", async (req, res) => {
     }
 });
 
+
+
+app.get('/api/total-amount', async (req, res) => {
+    try {
+        const result = await OrderDetails.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalSum: { $sum: "$totalAmount" }
+                }
+            }
+        ]);
+
+        res.json({ totalAmount: result[0]?.totalSum || 0 }); // use totalSum here
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed" });
+    }
+});
   
 
 

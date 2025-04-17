@@ -8,6 +8,8 @@ import Shops from './components/Shops';
 import Cart from './components/Cart';
 import ShopProducts from './components/ShopProducts';
 import ShopPage from './components/ShopPage'
+import ShopList from './components/ShopList';
+import ShopDetails from './components/ShopDetails';
 import './App.css'
 
 function App() {
@@ -22,6 +24,8 @@ function App() {
                 {/* <Route path="/dashboard/products"element={<Products/>}/> */}
                 <Route path="/cart" element={<Cart/>}/>
                 <Route path="/shop/:shopName" element={<ShopPage />} />
+                <Route path="/shoplist" element={<ShopList />} />
+                <Route path="/shop-details/:shopName" element={<ShopDetails />} />
             </Routes>
         </Router>
     );

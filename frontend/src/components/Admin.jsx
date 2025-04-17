@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Admin = () => {
     const [users, setUsers] = useState([]);
     const [coinInputs, setCoinInputs] = useState({}); // Store input values for each user
     const [shopName, setShopName] = useState("");
     const [shopOwnerName, setShopOwnerName] = useState("");
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchUsers();
@@ -82,6 +84,10 @@ const Admin = () => {
         } catch (error) {
             console.error("Error submitting shop details:", error);
         }
+    };
+
+    const handleGoToShops = () => {
+        navigate("/shoplist");
     };
 
     
@@ -168,8 +174,16 @@ const Admin = () => {
                         <button type="submit" className="bg-blue-500 text-white px-4 py-2">Add Shop</button>
                     </form>
                 </div>
+                
             </div>
+            <button
+                onClick={handleGoToShops}
+                className="mt-6 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
+            >
+                Go to Shops
+            </button>
         </div>
+        
     );
 
 };

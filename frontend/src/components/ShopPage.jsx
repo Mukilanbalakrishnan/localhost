@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import  axios from "axios";
 
 const ShopPage = () => {
     const { shopName } = useParams();
@@ -13,6 +14,7 @@ const ShopPage = () => {
     const [category, setCategory] = useState("");
     const [editIndex, setEditIndex] = useState(null);
     const [editedProduct, setEditedProduct] = useState({ quantity: '', price: '' });
+    const [totalAmount,setTotalAmount] = useState(0);
 
 
 
@@ -169,6 +171,16 @@ const ShopPage = () => {
             console.error("Failed to update product", err);
         }
     };
+
+    useEffect(() => {
+        axios.get("http://localhost:5000/api/total-amount")
+        .then((response) => {
+            setTotalAmount(response.data.totalAmount);
+        })
+        .catch((error) => {
+            console.error("Error fetching total amount:", error);
+        })
+    })
 
 
 
@@ -387,6 +399,9 @@ const ShopPage = () => {
                             ))}
                         </tbody>
                     </table>
+                    <div>
+                        {totalAmount}
+                    </div>
                 </div>
             </div>
 
