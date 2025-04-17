@@ -117,10 +117,15 @@ const ShopPage = () => {
             const response = await fetch(`http://localhost:5000/api/delivered-orders/${shopName}`);
             const data = await response.json();
             setFilteredOrders(data);
+    
+            // ✅ Calculate total amount from delivered orders
+            const total = data.reduce((sum, order) => sum + order.totalAmount, 0);
+            setTotalAmount(total);
         } catch (error) {
             console.error("Failed to fetch delivered orders:", error);
         }
     };
+    
 
 
     const handleDecline = async (orderId) => {
@@ -172,15 +177,6 @@ const ShopPage = () => {
         }
     };
 
-    useEffect(() => {
-        axios.get("http://localhost:5000/api/total-amount")
-        .then((response) => {
-            setTotalAmount(response.data.totalAmount);
-        })
-        .catch((error) => {
-            console.error("Error fetching total amount:", error);
-        })
-    })
 
 
 
@@ -399,9 +395,11 @@ const ShopPage = () => {
                             ))}
                         </tbody>
                     </table>
-                    <div>
-                        {totalAmount}
-                    </div>
+                    <div className="text-right mt-4 text-lg font-semibold text-indigo-800">
+  Total Earnings: ₹{totalAmount}
+</div>
+
+
                 </div>
             </div>
 
