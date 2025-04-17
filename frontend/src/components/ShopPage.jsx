@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import  axios from "axios";
+import axios from "axios";
 
 const ShopPage = () => {
     const { shopName } = useParams();
@@ -14,7 +14,10 @@ const ShopPage = () => {
     const [category, setCategory] = useState("");
     const [editIndex, setEditIndex] = useState(null);
     const [editedProduct, setEditedProduct] = useState({ quantity: '', price: '' });
-    const [totalAmount,setTotalAmount] = useState(0);
+    const [totalAmount, setTotalAmount] = useState(0);
+    const [shopEarnings, setShopEarnings] = useState(0);
+
+
 
 
 
@@ -104,6 +107,9 @@ const ShopPage = () => {
                 // Remove from UI since it is now marked as delivered in DB
                 setOrders(orders.filter(order => order._id !== orderId));
                 fetchDeliveredOrders();
+                fetchShopData();
+fetchShopEarnings(); // new
+
             } else {
                 console.error("Failed to mark order as delivered");
             }
@@ -117,7 +123,7 @@ const ShopPage = () => {
             const response = await fetch(`http://localhost:5000/api/delivered-orders/${shopName}`);
             const data = await response.json();
             setFilteredOrders(data);
-    
+
             // ✅ Calculate total amount from delivered orders
             const total = data.reduce((sum, order) => sum + order.totalAmount, 0);
             setTotalAmount(total);
@@ -125,7 +131,7 @@ const ShopPage = () => {
             console.error("Failed to fetch delivered orders:", error);
         }
     };
-    
+
 
 
     const handleDecline = async (orderId) => {
@@ -176,6 +182,24 @@ const ShopPage = () => {
             console.error("Failed to update product", err);
         }
     };
+
+
+    const fetchShopEarnings = async () => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/shop-earnings/${shopName}`);
+            const data = await res.json();
+            setShopEarnings(data.totalEarnings || 0);
+        } catch (err) {
+            console.error("Error fetching earnings:", err);
+        }
+    };
+    
+    useEffect(() => {
+        fetchShopEarnings();
+    }, [shopName]);
+    
+    
+    
 
 
 
@@ -395,9 +419,12 @@ const ShopPage = () => {
                             ))}
                         </tbody>
                     </table>
-                    <div className="text-right mt-4 text-lg font-semibold text-indigo-800">
-  Total Earnings: ₹{totalAmount}
+                    <div className="text-right mt-4 text-lg font-bold text-green-700">
+    Total Earnings Stored in DB: ₹{shopEarnings}
 </div>
+
+
+
 
 
                 </div>

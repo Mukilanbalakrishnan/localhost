@@ -95,6 +95,16 @@ const orderSchema = new mongoose.Schema({
 
 const OrderDetails = mongoose.model("OrderDetails", orderSchema);
 
+// const ShopModel = mongoose.models[shopName] || mongoose.model(shopName, new mongoose.Schema({
+//     productName: String,
+//     quantity: Number,
+//     price: Number,
+//     category: String,
+//     totalEarnings: Number
+// }), shopName);
+
+
+
 
 
 // ✅ API to get all users with coins
@@ -691,24 +701,59 @@ app.get("/api/orders/:shopName", async (req, res) => {
 
 
 
+// app.put("/api/orders/deliver/:orderId", async (req, res) => {
+//     try {
+//         const updatedOrder = await OrderDetails.findByIdAndUpdate(
+//             req.params.orderId,
+//             { delivered: true }, // ✅ Mark as delivered
+//             { new: true }
+//         );
+
+//         if (!updatedOrder) {
+//             return res.status(404).json({ success: false, message: "Order not found" });
+//         }
+
+//         res.json({ success: true, message: "Order delivered successfully" });
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ success: false, message: "Internal server error" });
+//     }
+// });
+
+
+
 app.put("/api/orders/deliver/:orderId", async (req, res) => {
     try {
-        const updatedOrder = await OrderDetails.findByIdAndUpdate(
-            req.params.orderId,
-            { delivered: true }, // ✅ Mark as delivered
-            { new: true }
-        );
-
-        if (!updatedOrder) {
+        // Step 1: Find the order
+        const order = await OrderDetails.findById(req.params.orderId);
+        if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        res.json({ success: true, message: "Order delivered successfully" });
+        // Step 2: Mark it as delivered
+        order.delivered = true;
+        await order.save();
+
+        // Step 3: Get the shop collection name
+        const shopCollectionName = order.shopName; // Shop name = collection name
+        const ShopCollection = mongoose.connection.collection(shopCollectionName);
+
+        // Step 4: Update or insert the total earnings
+        await ShopCollection.updateOne(
+            {}, // Empty filter: there should be only one earnings doc
+            { $inc: { totalEarnings: order.totalAmount } }, // Increment earnings
+            { upsert: true } // Create if not exists
+        );
+
+        // Step 5: Send response
+        res.json({ success: true, message: "Order delivered and earnings updated." });
+
     } catch (error) {
-        console.error(error);
+        console.error("Error delivering order:", error);
         res.status(500).json({ success: false, message: "Internal server error" });
     }
 });
+
 
 
 
@@ -907,6 +952,42 @@ app.get('/api/total-amount', async (req, res) => {
     }
 });
   
+
+
+
+
+// ✅ GET shop earnings by shopName
+app.get("/api/shop-earnings/:shopName", async (req, res) => {
+    try {
+        const shopName = req.params.shopName;
+
+        // Use unique model name to avoid OverwriteModelError
+        const modelName = `${shopName}_Earnings`;
+
+        const EarningsModel = mongoose.models[modelName] || mongoose.model(
+            modelName,
+            new mongoose.Schema({
+                productName: String,
+                quantity: Number,
+                price: Number,
+                category: String,
+                totalEarnings: Number,
+            }),
+            shopName // this is the actual collection name in DB
+        );
+
+        // Find any document with the totalEarnings field
+        const earningsDoc = await EarningsModel.findOne({ totalEarnings: { $exists: true } });
+
+        const totalEarnings = earningsDoc?.totalEarnings || 0;
+        res.json({ totalEarnings });
+    } catch (error) {
+        console.error("Error fetching shop earnings:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+
 
 
 
