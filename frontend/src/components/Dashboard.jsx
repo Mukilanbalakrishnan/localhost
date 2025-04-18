@@ -7,6 +7,16 @@ const Dashboard = () => {
     const [reportData, setReportData] = useState([]);
     const [showReport, setShowReport] = useState(false);
     const navigate = useNavigate();
+    const [userOrders, setUserOrders] = useState([]);
+
+    const [newOrders, setNewOrders] = useState([]);
+    const [currentOrder, setCurrentOrder] = useState(null); // 👈 For showing popup order
+
+
+
+
+
+
 
     useEffect(() => {
         const storedUser = JSON.parse(localStorage.getItem("userDetails"));
@@ -90,6 +100,41 @@ const Dashboard = () => {
         }
     };
 
+    useEffect(() => {
+        const fetchUnviewedOrder = async () => {
+            try {
+                const response = await fetch(`http://localhost:5000/api/orders/user/${user.userID}`);
+                const data = await response.json();
+                if (data.length > 0) {
+                    setCurrentOrder(data[0]); // Just show the first unviewed order
+                }
+            } catch (error) {
+                console.error("Error fetching unviewed orders:", error);
+            }
+        };
+
+        if (user) fetchUnviewedOrder();
+    }, [user]);
+
+
+
+    const handleOk = async () => {
+        try {
+            await fetch(`http://localhost:5000/api/orders/viewed/${currentOrder.orderId}`, {
+                method: "PUT",
+            });
+            setCurrentOrder(null);
+        } catch (error) {
+            console.error("Failed to mark order as viewed", error);
+        }
+    };
+
+
+
+
+
+
+
 
     return (
         <div className="p-10">
@@ -127,6 +172,38 @@ const Dashboard = () => {
                     Generate Report 📊
                 </button>
             </div>
+
+            {currentOrder && (
+                <div className="bg-green-100 border border-green-400 text-green-800 px-6 py-4 rounded relative mt-6">
+                    <strong className="font-bold">Order Update! 🎉</strong>
+                    <p><strong>Order ID:</strong> {currentOrder.orderId}</p>
+                    <p><strong>Shop:</strong> {currentOrder.shopName}</p>
+                    <p><strong>Status:</strong> {currentOrder.status}</p>
+                    <p className="mt-2 font-semibold underline">Products:</p>
+                    <ul className="list-disc pl-6">
+                        {currentOrder.products.map((p, index) => (
+                            <li key={index}>{p.productName} - {p.quantity} × ₹{p.price}</li>
+                        ))}
+                    </ul>
+                    <p className="mt-2"><strong>Total:</strong> ₹{currentOrder.totalAmount}</p>
+                    <p><strong>Time:</strong> {new Date(currentOrder.timestamp).toLocaleString()}</p>
+
+                    <button
+                        onClick={handleOk}
+                        className="mt-3 bg-indigo-700 text-white px-4 py-2 rounded"
+                    >
+                        OK
+                    </button>
+                </div>
+            )}
+
+
+
+
+
+
+
+
 
 
             {/* Report Display */}

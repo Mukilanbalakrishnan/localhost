@@ -1,28 +1,26 @@
+
+
+
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import axios from "axios";
 
 const ShopPage = () => {
-    const { shopName } = useParams();
     const [shopData, setShopData] = useState([]);
     const [productName, setProductName] = useState("");
     const [quantity, setQuantity] = useState("");
     const [price, setPrice] = useState("");
     const [message, setMessage] = useState("");
     const [orders, setOrders] = useState([]);
-    const [filteredOrders, setFilteredOrders] = useState([]); // Store report data
+    const [filteredOrders, setFilteredOrders] = useState([]);
     const [category, setCategory] = useState("");
     const [editIndex, setEditIndex] = useState(null);
-    const [editedProduct, setEditedProduct] = useState({ quantity: '', price: '' });
+    const [editedProduct, setEditedProduct] = useState({ quantity: "", price: "" });
     const [totalAmount, setTotalAmount] = useState(0);
-    const [shopEarnings, setShopEarnings] = useState(0);
+    const [shopReportData, setShopReportData] = useState([]);
+    const [showShopReport, setShowShopReport] = useState(false);
 
+    const { shopName } = useParams();
 
-
-
-
-
-    // Fetch shop data
     useEffect(() => {
         fetchShopData();
     }, [shopName]);
@@ -30,7 +28,6 @@ const ShopPage = () => {
     const fetchShopData = async () => {
         try {
             const response = await fetch(`http://localhost:5000/api/shop-details?shopName=${shopName}`);
-
             const data = await response.json();
             setShopData(data);
         } catch (error) {
@@ -38,7 +35,6 @@ const ShopPage = () => {
         }
     };
 
-    // Handle adding a new product
     const handleAddProduct = async (e) => {
         e.preventDefault();
         if (!productName || !quantity || !price || !category) {
@@ -51,15 +47,11 @@ const ShopPage = () => {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ shopName, productName, quantity, price, category }),
-
             });
-
-
 
             const data = await response.json();
             setMessage(data.message);
 
-            // Refresh the shop data to show the new product
             if (data.success) {
                 fetchShopData();
                 setProductName("");
@@ -75,46 +67,10 @@ const ShopPage = () => {
     const fetchOrders = async () => {
         try {
             const response = await fetch(`http://localhost:5000/api/orders/${shopName}`);
-
             const data = await response.json();
             setOrders(data);
         } catch (error) {
             console.error("Error fetching orders:", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchOrders(); // Fetch orders when component loads
-        fetchDeliveredOrders();
-        // Polling: Fetch new orders every 3 seconds
-        const interval = setInterval(() => {
-            fetchOrders();
-            fetchDeliveredOrders();
-        }, 3000);
-        return () => clearInterval(interval); // Cleanup on unmount
-    }, [shopName]);
-
-
-
-    const handleDeliver = async (orderId) => {
-        try {
-            const response = await fetch(`http://localhost:5000/api/orders/deliver/${orderId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (response.ok) {
-                // Remove from UI since it is now marked as delivered in DB
-                setOrders(orders.filter(order => order._id !== orderId));
-                fetchDeliveredOrders();
-                fetchShopData();
-fetchShopEarnings(); // new
-
-            } else {
-                console.error("Failed to mark order as delivered");
-            }
-        } catch (error) {
-            console.error("Error delivering order:", error);
         }
     };
 
@@ -123,8 +79,6 @@ fetchShopEarnings(); // new
             const response = await fetch(`http://localhost:5000/api/delivered-orders/${shopName}`);
             const data = await response.json();
             setFilteredOrders(data);
-
-            // ✅ Calculate total amount from delivered orders
             const total = data.reduce((sum, order) => sum + order.totalAmount, 0);
             setTotalAmount(total);
         } catch (error) {
@@ -132,7 +86,36 @@ fetchShopEarnings(); // new
         }
     };
 
+    useEffect(() => {
+        fetchOrders();
+        fetchDeliveredOrders();
 
+        const interval = setInterval(() => {
+            fetchOrders();
+            fetchDeliveredOrders();
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [shopName]);
+
+    const handleDeliver = async (orderId) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/orders/deliver/${orderId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            if (response.ok) {
+                setOrders(orders.filter((order) => order._id !== orderId));
+                fetchDeliveredOrders();
+                fetchShopData();
+            } else {
+                console.error("Failed to mark order as delivered");
+            }
+        } catch (error) {
+            console.error("Error delivering order:", error);
+        }
+    };
 
     const handleDecline = async (orderId) => {
         try {
@@ -141,7 +124,9 @@ fetchShopEarnings(); // new
             });
 
             if (response.ok) {
-                setOrders(prev => prev.filter(order => order._id !== orderId));
+                const result = await response.json();
+                console.log("Order declined:", result.message);
+                fetchOrders();
                 setMessage("Order declined successfully.");
             } else {
                 console.error("Failed to decline the order");
@@ -160,13 +145,11 @@ fetchShopEarnings(); // new
                     shopName,
                     productName,
                     quantity: Number(editedProduct.quantity),
-                    price: Number(editedProduct.price)
+                    price: Number(editedProduct.price),
                 }),
             });
 
             if (!res.ok) throw new Error("Failed to update");
-
-            const updatedProduct = await res.json();
 
             const updatedData = [...shopData];
             updatedData[editIndex] = {
@@ -183,35 +166,88 @@ fetchShopEarnings(); // new
         }
     };
 
-
-    const fetchShopEarnings = async () => {
-        try {
-            const res = await fetch(`http://localhost:5000/api/shop-earnings/${shopName}`);
-            const data = await res.json();
-            setShopEarnings(data.totalEarnings || 0);
-        } catch (err) {
-            console.error("Error fetching earnings:", err);
+    const handleGroupedDeliver = async (orderIds) => {
+        for (const orderId of orderIds) {
+            await handleDeliver(orderId);
         }
     };
-    
+
+    const handleGroupedDecline = async (orderIds) => {
+        try {
+            const responses = await Promise.all(
+                orderIds.map((orderId) =>
+                    fetch(`http://localhost:5000/api/orders/decline/${orderId}`, {
+                        method: "DELETE",
+                    })
+                )
+            );
+
+            const allSuccessful = responses.every((res) => res.ok);
+
+            if (allSuccessful) {
+                setOrders((prevOrders) =>
+                    prevOrders.filter((group) => !orderIds.includes(group.products[0]._id))
+                );
+                setMessage("Order group declined successfully.");
+            } else {
+                console.error("One or more decline requests failed.");
+            }
+        } catch (error) {
+            console.error("Error declining grouped orders:", error);
+        }
+    };
+
     useEffect(() => {
-        fetchShopEarnings();
+        const fetchTotalAmount = async () => {
+            try {
+                const response = await fetch(`http://localhost:5000/api/orders/total/${shopName}`);
+                const data = await response.json();
+                setTotalAmount(data.totalAmount);
+            } catch (error) {
+                console.error("Error fetching total amount:", error);
+            }
+        };
+
+        fetchTotalAmount();
     }, [shopName]);
-    
-    
-    
 
+    const handleGenerateReport = async () => {
+        if (!shopName) {
+            alert("Login to shop");
+            return;
+        }
 
+        const month = prompt("Enter Month (MM):");
+        const year = prompt("Enter Year (YYYY):");
 
+        if (!month || !year) {
+            alert("Please Enter month and year");
+            return;
+        }
 
+        try {
+            const response = await fetch(
+                `http://localhost:5000/api/Shopreport?shopName=${shopName}&month=${month}&year=${year}`
+            );
 
+            if (!response.ok) {
+                throw new Error(`Http Error: ${response.status}`);
+            }
 
-
-
+            const data = await response.json();
+            setShopReportData(data);
+            setShowShopReport(true);
+        } catch (error) {
+            console.error("Error fetching report:", error);
+            alert("Failed to fetch report. Please try again.");
+        }
+    };
 
     return (
         <div className="mx-auto max-w-5xl p-6 bg-white shadow-lg rounded-lg mt-10">
-            <h2 className="text-3xl font-bold text-indigo-800 mb-6">Welcome to <span className="text-orange-600">{shopName}</span></h2>
+            <h2 className="text-3xl font-bold text-indigo-800 mb-6">
+                Welcome to <span className="text-orange-600">{shopName}</span>
+            </h2>
 
             {/* Add Product Form */}
             <div className="bg-gray-100 p-5 rounded-lg shadow-md mb-6">
@@ -223,7 +259,7 @@ fetchShopEarnings(); // new
                         value={productName}
                         onChange={(e) => setProductName(e.target.value)}
                         required
-                        className="w-full p-2 border border-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full p-2 border border-gray-400 rounded-md"
                     />
                     <input
                         type="number"
@@ -231,7 +267,7 @@ fetchShopEarnings(); // new
                         value={quantity}
                         onChange={(e) => setQuantity(e.target.value)}
                         required
-                        className="w-full p-2 border border-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full p-2 border border-gray-400 rounded-md"
                     />
                     <input
                         type="number"
@@ -239,7 +275,7 @@ fetchShopEarnings(); // new
                         value={price}
                         onChange={(e) => setPrice(e.target.value)}
                         required
-                        className="w-full p-2 border border-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full p-2 border border-gray-400 rounded-md"
                     />
                     <input
                         type="text"
@@ -247,11 +283,11 @@ fetchShopEarnings(); // new
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
                         required
-                        className="w-full p-2 border border-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full p-2 border border-gray-400 rounded-md"
                     />
                     <button
                         type="submit"
-                        className="w-full px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition"
+                        className="w-full px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
                     >
                         Add Product
                     </button>
@@ -259,182 +295,164 @@ fetchShopEarnings(); // new
                 {message && <p className="text-green-600 mt-2">{message}</p>}
             </div>
 
-            {/* Shop Inventory */}
+            {/* Continue with rest of the components like inventory, orders, reports */}
+            <table className="min-w-full table-auto text-sm text-left text-gray-700">
+                <thead>
+                    <tr className="bg-indigo-200 text-indigo-900">
+                        <th className="px-4 py-2">Product</th>
+                        <th className="px-4 py-2">Category</th>
+                        <th className="px-4 py-2">Quantity</th>
+                        <th className="px-4 py-2">Price</th>
+                        <th className="px-4 py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {shopData.map((product, index) => (
+                        <tr key={index} className="border-t">
+                            <td className="px-4 py-2">{product.productName}</td>
+                            <td className="px-4 py-2">{product.category}</td>
+                            <td className="px-4 py-2">
+                                {editIndex === index ? (
+                                    <input
+                                        type="number"
+                                        value={editedProduct.quantity}
+                                        onChange={(e) =>
+                                            setEditedProduct({ ...editedProduct, quantity: e.target.value })
+                                        }
+                                        className="w-16 border px-2 py-1"
+                                    />
+                                ) : (
+                                    product.quantity
+                                )}
+                            </td>
+                            <td className="px-4 py-2">
+                                {editIndex === index ? (
+                                    <input
+                                        type="number"
+                                        value={editedProduct.price}
+                                        onChange={(e) =>
+                                            setEditedProduct({ ...editedProduct, price: e.target.value })
+                                        }
+                                        className="w-16 border px-2 py-1"
+                                    />
+                                ) : (
+                                    product.price
+                                )}
+                            </td>
+                            <td className="px-4 py-2">
+                                {editIndex === index ? (
+                                    <button
+                                        onClick={() => handleSave(shopName, product.productName)}
+                                        className="text-green-600 hover:underline mr-2"
+                                    >
+                                        Save
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => {
+                                            setEditIndex(index);
+                                            setEditedProduct({ quantity: product.quantity, price: product.price });
+                                        }}
+                                        className="text-blue-600 hover:underline"
+                                    >
+                                        Edit
+                                    </button>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+
+            {/* Order Section */}
             <div className="bg-gray-100 p-5 rounded-lg shadow-md mb-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">Shop Inventory</h3>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full border border-gray-300">
-                        <thead className="bg-gray-200">
-
-                            <tr>
-
-                                <th className="p-3 border">Product Name</th>
-                                <th className="p-3 border">Quantity</th>
-                                <th className="p-3 border">Price</th>
-                                <th className="p-3 border">Category</th>
-                                <th className="p-3 border">Action</th>
-
-                            </tr>
-
-                        </thead>
-                        <tbody>
-                            {shopData.map((item, index) => (
-                                <tr key={index} className="border-b border-gray-300">
-                                    <td className="p-3 text-center">{item.productName}</td>
-                                    <td className="p-3 text-center">
-                                        {editIndex === index ? (
-                                            <input
-                                                type="number"
-                                                value={editedProduct.quantity}
-                                                onChange={(e) =>
-                                                    setEditedProduct({ ...editedProduct, quantity: e.target.value })
-                                                }
-                                                className="w-20 p-1 border rounded"
-                                            />
-                                        ) : (
-                                            item.quantity
-                                        )}
-                                    </td>
-                                    <td className="p-3 text-center">
-                                        {editIndex === index ? (
-                                            <input
-                                                type="number"
-                                                value={editedProduct.price}
-                                                onChange={(e) =>
-                                                    setEditedProduct({ ...editedProduct, price: e.target.value })
-                                                }
-                                                className="w-20 p-1 border rounded"
-                                            />
-                                        ) : (
-                                            item.price
-                                        )}
-                                    </td>
-
-                                    <td className="p-3 text-center">{item.category}</td>
-                                    <td className="p-3 border">
-                                        {editIndex === index ? (
-                                            <button
-                                                className="px-4 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 transition"
-                                                onClick={() => handleSave(shopName, item.productName)}
-                                            >
-                                                Save
-                                            </button>
-                                        ) : (
-                                            <button
-                                                className="px-4 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
-                                                onClick={() => {
-                                                    setEditIndex(index);
-                                                    setEditedProduct({ quantity: item.quantity, price: item.price });
-                                                }}
-                                            >
-                                                Update
-                                            </button>
-                                        )}
-                                    </td>
-
-                                </tr>
-                            ))}
-
-                        </tbody>
-                    </table>
-                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">Pending Orders</h3>
+                {orders.length === 0 ? (
+                    <p className="text-gray-600">No pending orders.</p>
+                ) : (
+                    orders.map((order) => (
+                        <div key={order._id} className="border-b py-3">
+                            <p><strong>Customer:</strong> {order.customerName}</p>
+                            <p><strong>Products:</strong></p>
+                            <ul className="list-disc ml-6">
+                                {order.products.map((product, i) => (
+                                    <li key={i}>
+                                        {product.productName} - {product.quantity} pcs @ ₹{product.price}
+                                    </li>
+                                ))}
+                            </ul>
+                            <p><strong>Total:</strong> ₹{order.totalAmount}</p>
+                            <div className="mt-2 space-x-2">
+                                <button
+                                    onClick={() => handleDeliver(order._id)}
+                                    className="px-4 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                                >
+                                    Deliver
+                                </button>
+                                <button
+                                    onClick={() => handleDecline(order._id)}
+                                    className="px-4 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                                >
+                                    Decline
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
 
-            {/* Shop Orders */}
+
+            {/* Delivered Orders Report */}
             <div className="bg-gray-100 p-5 rounded-lg shadow-md mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Shop Orders</h2>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full border border-gray-300">
-                        <thead className="bg-gray-200">
-                            <tr>
-                                <th className="p-3 border">Order ID</th>
-                                <th className="p-3 border">UserID</th>
-                                <th className="p-3 border">Product Name</th>
-                                <th className="p-3 border">Quantity</th>
-                                <th className="p-3 border">Total Amount</th>
-                                <th className="p-3 border">Timestamp</th>
-                                <th className="p-3 border">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {orders.map(order => (
-                                <tr key={order._id} className="text-center border-b">
-                                    <td className="p-3 border">{order.orderId}</td>
-                                    <td className="p-3 border">{order.userID}</td>
-                                    <td className="p-3 border">{order.productName}</td>
-                                    <td className="p-3 border">{order.quantity}</td>
-                                    <td className="p-3 border">₹{order.totalAmount}</td>
-                                    <td className="p-3 border">{new Date(order.timestamp).toLocaleString()}</td>
-                                    <td className="p-3 border">
-                                        <button
-                                            onClick={() => handleDeliver(order._id)}
-                                            className="px-4 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
-                                        >
-                                            Deliver
-                                        </button>
-                                    </td>
-                                    <td className="p-3 border">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">Delivered Orders Summary</h3>
+                <p className="mb-2">Total Earned: ₹{totalAmount}</p>
+                <button
+                    onClick={handleGenerateReport}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                >
+                    Generate Monthly Report
+                </button>
 
-                                        <button
-                                            onClick={() => handleDecline(order._id)}
-                                            className="px-4 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition"
-                                        >
-                                            Decline
-                                        </button>
-                                    </td>
-
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                {showShopReport && (
+                    <div className="mt-4">
+                        <h4 className="text-lg font-semibold mb-2">Monthly Report</h4>
+                        {shopReportData.length === 0 ? (
+                            <p>No data available for this period.</p>
+                        ) : (
+                            <table className="w-full table-auto text-sm text-left mt-2">
+                                <thead className="bg-gray-300">
+                                    <tr>
+                                        <th className="px-4 py-2">Date</th>
+                                        <th className="px-4 py-2">Customer</th>
+                                        <th className="px-4 py-2">Products</th>
+                                        <th className="px-4 py-2">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {shopReportData.map((report, idx) => (
+                                        <tr key={idx} className="border-t">
+                                            <td className="px-4 py-2">{report.date}</td>
+                                            <td className="px-4 py-2">{report.customerName}</td>
+                                            <td className="px-4 py-2">
+                                                <ul className="list-disc ml-4">
+                                                    {report.products.map((p, i) => (
+                                                        <li key={i}>{p.productName} ({p.quantity})</li>
+                                                    ))}
+                                                </ul>
+                                            </td>
+                                            <td className="px-4 py-2">₹{report.totalAmount}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                )}
             </div>
-
-
-
-            <div className="bg-gray-100 p-5 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Report for {shopName}</h2>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full border border-gray-300">
-                        <thead className="bg-gray-200">
-                            <tr>
-                                <th className="p-3 border">Order ID</th>
-                                <th className="p-3 border">UserID</th>
-                                <th className="p-3 border">Product Name</th>
-                                <th className="p-3 border">Quantity</th>
-                                <th className="p-3 border">Total Amount</th>
-                                <th className="p-3 border">Timestamp</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredOrders.map(order => (
-                                <tr key={order._id} className="text-center border-b">
-                                    <td className="p-3 border">{order.orderId}</td>
-                                    <td className="p-3 border">{order.userID || order.username}</td>
-                                    <td className="p-3 border">{order.productName}</td>
-                                    <td className="p-3 border">{order.quantity}</td>
-                                    <td className="p-3 border">₹{order.totalAmount}</td>
-                                    <td className="p-3 border">{new Date(order.timestamp).toLocaleString()}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    <div className="text-right mt-4 text-lg font-bold text-green-700">
-    Total Earnings Stored in DB: ₹{shopEarnings}
-</div>
-
-
-
-
-
-                </div>
-            </div>
-
-
-
         </div>
     );
-
 };
 
 export default ShopPage;
+
+

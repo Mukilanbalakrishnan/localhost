@@ -90,18 +90,17 @@ const orderSchema = new mongoose.Schema({
     totalAmount: Number,
     orderId: Number,
     timestamp: { type: Date, default: Date.now },
-    delivered: { type: Boolean, default: false }  // ✅ New field to track delivered orders
+    delivered: { type: Boolean, default: false },
+    status: { type: String, default: "Pending" },  // ✅ Existing
+
+    viewed: { type: Boolean, default: false } // 👈 NEW
+    // ✅ New
 }, { collection: "OrderDetails" });
 
 const OrderDetails = mongoose.model("OrderDetails", orderSchema);
 
-// const ShopModel = mongoose.models[shopName] || mongoose.model(shopName, new mongoose.Schema({
-//     productName: String,
-//     quantity: Number,
-//     price: Number,
-//     category: String,
-//     totalEarnings: Number
-// }), shopName);
+
+
 
 
 
@@ -291,47 +290,7 @@ app.get("/api/shops", async (req, res) => {
 
 
 
-// app.post("/api/add-shop", async (req, res) => {
-//     try {
-//         const { shopName, shopOwnerName } = req.body;
 
-//         // Check if shop already exists in ShopDetails collection
-//         const existingShop = await ShopDetails.findOne({ shopName });
-
-//         if (existingShop) {
-//             return res.status(400).json({ error: "Shop name already exists" });
-//         }
-
-//         // Add shop details to ShopDetails collection
-//         const newShop = new ShopDetails({ shopName, shopOwnerName });
-//         await newShop.save();
-
-//         // Define a dynamic schema for the new shop's collection
-//         const shopSchema = new mongoose.Schema({
-//             productName: String,
-//             quantity: Number,
-//             price: Number,
-//             category: String
-//         });
-
-//         // Create a new Mongoose model dynamically
-//         const ShopModel = mongoose.model(shopName, shopSchema, shopName);
-
-//         // Insert a dummy document to force collection creation
-//         await ShopModel.create({
-//             productName: "Sample Product",
-//             quantity: 0,
-//             price: 0,
-//             category: "Sample Category"
-//         });
-
-//         res.status(201).json({ success: true, message: "Shop added successfully and collection created" });
-
-//     } catch (error) {
-//         console.error("Error adding shop:", error);
-//         res.status(500).json({ error: "Internal server error" });
-//     }
-// });
 
 
 app.post("/api/add-shop", async (req, res) => {
@@ -679,15 +638,42 @@ app.post("/api/orders", async (req, res) => {
 });
 
 
-// API to fetch orders for a shop (From OrderDetails)
+
+
+
 app.get("/api/orders/:shopName", async (req, res) => {
     try {
         const orders = await OrderDetails.find({
             shopName: req.params.shopName,
-            delivered: false // ✅ Fetch only non-delivered orders
+            delivered: false,
+            status: { $ne: "Rejected" } // ⛔ Exclude Rejected orders
         }).sort({ timestamp: -1 });
 
-        res.json(orders);
+
+        // Group by orderId
+        const grouped = {};
+
+        orders.forEach(order => {
+            const id = order.orderId;
+            if (!grouped[id]) {
+                grouped[id] = {
+                    orderId: order.orderId,
+                    userID: order.userID,
+                    shopName: order.shopName,
+                    timestamp: order.timestamp,
+                    products: []
+                };
+            }
+
+            grouped[id].products.push({
+                _id: order._id,
+                productName: order.productName,
+                quantity: order.quantity,
+                totalAmount: order.totalAmount
+            });
+        });
+
+        res.json(Object.values(grouped)); // send grouped orders
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Internal server error" });
@@ -697,58 +683,32 @@ app.get("/api/orders/:shopName", async (req, res) => {
 
 
 
-// app.put("/api/orders/deliver/:orderId", async (req, res) => {
-//     try {
-//         const updatedOrder = await OrderDetails.findByIdAndUpdate(
-//             req.params.orderId,
-//             { delivered: true }, // ✅ Mark as delivered
-//             { new: true }
-//         );
 
-//         if (!updatedOrder) {
-//             return res.status(404).json({ success: false, message: "Order not found" });
-//         }
-
-//         res.json({ success: true, message: "Order delivered successfully" });
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ success: false, message: "Internal server error" });
-//     }
-// });
 
 
 
 app.put("/api/orders/deliver/:orderId", async (req, res) => {
     try {
-        // Step 1: Find the order
-        const order = await OrderDetails.findById(req.params.orderId);
-        if (!order) {
+        const updatedOrder = await OrderDetails.findByIdAndUpdate(
+            req.params.orderId,
+            {
+                delivered: true,
+                status: "Success" // ✅ update this too
+            },
+            { new: true }
+        );
+
+        if (!updatedOrder) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        // Step 2: Mark it as delivered
-        order.delivered = true;
-        await order.save();
-
-        // Step 3: Get the shop collection name
-        const shopCollectionName = order.shopName; // Shop name = collection name
-        const ShopCollection = mongoose.connection.collection(shopCollectionName);
-
-        // Step 4: Update or insert the total earnings
-        await ShopCollection.updateOne(
-            {}, // Empty filter: there should be only one earnings doc
-            { $inc: { totalEarnings: order.totalAmount } }, // Increment earnings
-            { upsert: true } // Create if not exists
-        );
-
-        // Step 5: Send response
-        res.json({ success: true, message: "Order delivered and earnings updated." });
-
+        res.json({ success: true, message: "Order delivered successfully" });
     } catch (error) {
-        console.error("Error delivering order:", error);
+        console.error(error);
         res.status(500).json({ success: false, message: "Internal server error" });
     }
 });
+
 
 
 
@@ -785,14 +745,16 @@ app.get('/api/report', async (req, res) => {
 
         const orders = await OrderDetails.find({
             userID: userID,
+            delivered: true, // ✅ Only include delivered orders
             timestamp: { $gte: startDate, $lte: endDate }
-        }).select("shopName productName quantity totalAmount timestamp"); // Use totalAmount
+        }).select("shopName productName quantity totalAmount timestamp");
 
         res.json(orders);
     } catch (error) {
         res.status(500).json({ error: "Error fetching orders" });
     }
 });
+
 
 
 
@@ -816,35 +778,7 @@ app.get("/api/orders/report", async (req, res) => {
 });
 
 
-// Example route in your Express backend
-// app.delete("/api/orders/decline/:orderId", async (req, res) => {
-//     const { orderId } = req.params;
 
-//     try {
-//         const order = await Order.findById(orderId);
-//         if (!order) return res.status(404).json({ error: "Order not found" });
-
-//         // Restore product quantity
-//         await Product.updateOne(
-//             { shopName: order.shopName, productName: order.productName },
-//             { $inc: { quantity: order.quantity } }
-//         );
-
-//         // Restore user coins
-//         await User.updateOne(
-//             { userID: order.userID },
-//             { $inc: { coins: order.totalAmount } }
-//         );
-
-//         // Delete order
-//         await OrderDetails.deleteOne({ _id: orderId });
-
-//         res.json({ success: true, message: "Order declined and inventory/coins restored." });
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ error: "Server error during decline." });
-//     }
-// });
 
 
 app.delete("/api/orders/decline/:orderId", async (req, res) => {
@@ -858,50 +792,47 @@ app.delete("/api/orders/decline/:orderId", async (req, res) => {
             return res.status(404).json({ message: "Order not found" });
         }
 
-        console.log("Order found:", order);
-
         const { userID, productName, quantity, totalAmount, shopName } = order;
 
-        // Step 2: Refund coins
+        // ✅ Step 2: Save rejected copy BEFORE modifying anything
+        const rejectedOrder = {
+            ...order.toObject(),
+            _id: undefined, // avoid duplicate key error
+            delivered: false,
+            status: "Rejected",
+            viewed: false,
+        };
+        await OrderDetails.create(rejectedOrder);
+
+        // ✅ Step 3: Restore coins
         const user = await User.findOne({ userID: userID.trim() });
-
-        if (!user) {
-            console.log("All users:", await User.find({}));
-
-            // console.log("User not found:", userID);
-        } else {
-            console.log("User before refund:", user);
+        if (user) {
             user.coins += totalAmount;
             await user.save();
-            console.log("User after refund:", user);
         }
 
-        // Step 3: Restore product quantity
-        // Update product quantity from the specific shop collection
+        // ✅ Step 4: Restore product quantity
         const getShopProductModel = (shopName) => {
             return mongoose.model(shopName, shopProductSchema, shopName);
         };
-
-        const ShopProduct = getShopProductModel(order.shopName);
-        const product = await ShopProduct.findOne({ productName: order.productName });
+        const ShopProduct = getShopProductModel(shopName);
+        const product = await ShopProduct.findOne({ productName });
         if (product) {
-            product.quantity += order.quantity;
+            product.quantity += quantity;
             await product.save();
-            console.log("Product quantity restored.");
-        } else {
-            console.log("Product not found in", order.shopName);
         }
 
-        // Step 4: Delete order
+        // ✅ Step 5: Delete the original pending order
         await OrderDetails.findByIdAndDelete(orderId);
-        console.log("Order deleted");
 
-        res.status(200).json({ message: "Order declined and changes made" });
+        res.status(200).json({ message: "Order declined and stored as rejected" });
     } catch (error) {
         console.error("Error in decline route:", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
 });
+
+
 
 
 
@@ -930,55 +861,39 @@ app.put("/api/products/update", async (req, res) => {
 
 
 
-app.get('/api/total-amount', async (req, res) => {
+
+
+
+
+
+
+app.get("/api/orders/user/:userID", async (req, res) => {
     try {
-        const result = await OrderDetails.aggregate([
+        const orders = await OrderDetails.aggregate([
+            { $match: { userID: req.params.userID, viewed: false } },
             {
                 $group: {
-                    _id: null,
-                    totalSum: { $sum: "$totalAmount" }
+                    _id: "$orderId",
+                    orderId: { $first: "$orderId" },
+                    shopName: { $first: "$shopName" },
+                    status: { $first: "$status" },
+                    products: {
+                        $push: {
+                            productName: "$productName",
+                            quantity: "$quantity",
+                            price: "$price"
+                        }
+                    },
+                    totalAmount: { $first: "$totalAmount" }, // 👈 Fixed here
+                    timestamp: { $first: "$timestamp" }
                 }
-            }
+            },
+            { $sort: { timestamp: -1 } }
         ]);
 
-        res.json({ totalAmount: result[0]?.totalSum || 0 }); // use totalSum here
+        res.json(orders);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed" });
-    }
-});
-  
-
-
-
-
-// ✅ GET shop earnings by shopName
-app.get("/api/shop-earnings/:shopName", async (req, res) => {
-    try {
-        const shopName = req.params.shopName;
-
-        // Use unique model name to avoid OverwriteModelError
-        const modelName = `${shopName}_Earnings`;
-
-        const EarningsModel = mongoose.models[modelName] || mongoose.model(
-            modelName,
-            new mongoose.Schema({
-                productName: String,
-                quantity: Number,
-                price: Number,
-                category: String,
-                totalEarnings: Number,
-            }),
-            shopName // this is the actual collection name in DB
-        );
-
-        // Find any document with the totalEarnings field
-        const earningsDoc = await EarningsModel.findOne({ totalEarnings: { $exists: true } });
-
-        const totalEarnings = earningsDoc?.totalEarnings || 0;
-        res.json({ totalEarnings });
-    } catch (error) {
-        console.error("Error fetching shop earnings:", error);
+        console.error("Error fetching user's unviewed orders:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -988,7 +903,88 @@ app.get("/api/shop-earnings/:shopName", async (req, res) => {
 
 
 
+// Mark orders as seen for a user
+app.put("/api/orders/mark-seen/:userID", async (req, res) => {
+    try {
+        const { userID } = req.params;
 
+        await OrderDetails.updateMany(
+            { userID, seen: false, status: { $in: ["Success", "Rejected"] } },
+            { $set: { seen: true } }
+        );
+
+        res.json({ message: "Orders marked as seen" });
+    } catch (err) {
+        console.error("Error updating orders:", err);
+        res.status(500).json({ error: "Failed to mark as seen" });
+    }
+});
+
+
+// PUT /api/orders/viewed/:id
+app.put("/api/orders/viewed/:orderId", async (req, res) => {
+    try {
+        await OrderDetails.updateMany(
+            { orderId: req.params.orderId },
+            { $set: { viewed: true } }
+        );
+        res.json({ message: "Order marked as viewed" });
+    } catch (error) {
+        console.error("Error updating viewed status:", error);
+        res.status(500).json({ error: "Failed to update viewed status" });
+    }
+});
+
+
+
+
+
+
+app.get("/api/orders/total/:shopName", async (req, res) => {
+    try {
+        // Aggregating total amount for orders by shopName
+        const totalAmount = await OrderDetails.aggregate([
+            { $match: { shopName: req.params.shopName } },
+            { $group: { _id: "$shopName", totalAmount: { $sum: "$totalAmount" } } }
+        ]);
+
+        if (totalAmount.length > 0) {
+            res.json(totalAmount[0]); // Send total amount for the shop
+        } else {
+            res.json({ totalAmount: 0 }); // If no orders, return 0
+        }
+    } catch (error) {
+        console.error("Error fetching total amount for shop:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+
+
+
+app.get('/api/Shopreport', async (req, res) => {
+    const {shopName, month, year} = req.query;
+    console.log(shopName);
+    
+
+    if (!shopName || !month || !year) {
+        return res.status(400).json({error: "Month And year are required"});
+    }
+
+    try {
+        const startDate = new Date(`${year}-${month}-01`);
+        const endDate = new Date(`${year}-${month}-31`);
+
+        const orders = await OrderDetails.find({
+            shopName: shopName,
+            timestamp: {$gte: startDate, $lte: endDate}
+        }).select("shopName productName quantity totalAmount timestamp");
+
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({error: "Error fetching Orders"})
+    }
+});
 
 
 
